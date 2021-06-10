@@ -1,6 +1,6 @@
 package org.knoldus.databaseConnection
 
-import org.knoldus.jwt.JWTGenerator.createToken
+import org.knoldus.jwt.JWTGenerator
 import org.knoldus.model.UserType.{Moderator, UserType}
 import org.knoldus.model.{User, UserCredentials, UserType}
 import slick.ast.BaseTypedType
@@ -37,6 +37,8 @@ class UserDb(db: MySQLProfile.backend.DatabaseDef)(implicit ec: ExecutionContext
     string => UserType.withName(string)
   )
 
+  val jwtGenerator: JWTGenerator = new JWTGenerator
+
   def getById(id : Option[String]) : Future[Seq[User]] = {
     db.run[Seq[User]](this.filter(_.id === id).result)
   }
@@ -52,17 +54,17 @@ class UserDb(db: MySQLProfile.backend.DatabaseDef)(implicit ec: ExecutionContext
       if(user1.nonEmpty){
         if(user1.head.status > Some(0)){
           if(user1.head.password == credentials.password){
-            if(user1.head.category != UserType.Admin){
+            if(user1.head.category != UserType.Admin && user1.head.category != Moderator){
               if(user1.head.category == UserType.Premium) {
                 updateReward(user1.head.id,20)
-                Some(createToken("Premium" , 60))
+                Some(jwtGenerator.createToken("Premium" , 60))
               }
               else {
                 updateReward(user1.head.id,10)
-                Some(createToken(user1.head.category.toString , 60))
+                Some(jwtGenerator.createToken(user1.head.category.toString , 60))
               }
             }
-            else Some(createToken("Admin" , 60))
+            else Some(jwtGenerator.createToken("Admin" , 60))
           }
           else None
         }

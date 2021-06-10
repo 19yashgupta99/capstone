@@ -1,14 +1,15 @@
 package org.knoldus.jwt
 
 import akka.http.scaladsl.server.directives.Credentials
-import org.knoldus.model.{UserCredentials, UserJsonProtocol}
+import org.knoldus.model.UserType.Admin
+import org.knoldus.model.{UserCredentials, UserJsonProtocol, UserRole, UserType}
 import pdi.jwt.{JwtAlgorithm, JwtClaim, JwtSprayJson}
 import spray.json._
 
 import java.util.concurrent.TimeUnit
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
-object JWTGenerator extends UserJsonProtocol{
+class JWTGenerator extends UserJsonProtocol{
 
   val algorithm = JwtAlgorithm.HS256
   val secretKey = "YashGupta'sSecretKey"
@@ -29,4 +30,23 @@ object JWTGenerator extends UserJsonProtocol{
     JwtSprayJson.isValid(token, secretKey, Seq(algorithm))
   }
 
+  def isTokenExpired(token: String): Boolean = tokenDecoder(token) match {
+    case Success(claims) =>
+      println(claims.content.parseJson.convertTo[UserRole])
+      claims.expiration.getOrElse(0L) < System.currentTimeMillis() / 1000
+    case Failure(_) => true
+  }
+
+  def isTokenValid(token: String): Boolean = {
+    if (isTokenValidOrNot(token)) {
+      tokenDecoder(token) match {
+        case Success(claims) =>
+          val role = claims.content.parseJson.convertTo[UserRole]
+          if (UserType.withName(role.role) == Admin) true
+          else false
+        case Failure(_) => false
+      }
+    }
+    else false
+  }
 }

@@ -6,40 +6,17 @@ import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
-import org.knoldus.databaseCalls.UserDatabase
-import org.knoldus.jwt.JWTGenerator.{isTokenValidOrNot, tokenDecoder}
-import org.knoldus.model.UserType.Admin
-import org.knoldus.model.{User, UserCredentials, UserId, UserJsonProtocol, UserRole, UserType}
+import org.knoldus.jwt.JWTGenerator
+import org.knoldus.model._
 import org.knoldus.service.UserService
-import spray.json._
 
 import java.util.UUID.randomUUID
 import scala.util.{Failure, Success}
 
-class Routes extends UserJsonProtocol with SprayJsonSupport {
-
-  def isTokenExpired(token: String): Boolean = tokenDecoder(token) match {
-    case Success(claims) =>
-      println(claims.content.parseJson.convertTo[UserRole])
-      claims.expiration.getOrElse(0L) < System.currentTimeMillis() / 1000
-    case Failure(_) => true
-  }
-
-  def isTokenValid(token: String): Boolean = {
-    if (isTokenValidOrNot(token)) {
-      tokenDecoder(token) match {
-        case Success(claims) =>
-          val role = claims.content.parseJson.convertTo[UserRole]
-          if (UserType.withName(role.role) == Admin) true
-          else false
-        case Failure(_) => false
-      }
-    }
-    else false
-  }
+class Routes(userService : UserService, jwtGenerator: JWTGenerator) extends UserJsonProtocol with SprayJsonSupport {
 
 
-  val userService = new UserService(new UserDatabase)
+  //val userService = new UserService(new UserDatabase)
 
   val userManagementRouteSkeleton: Route =
     pathPrefix("api" / "user") {
@@ -47,8 +24,8 @@ class Routes extends UserJsonProtocol with SprayJsonSupport {
         path("getAllUsers") {
           optionalHeaderValueByName("Authorization") {
             case Some(token) =>
-              if (isTokenValid(token)) {
-                if (isTokenExpired(token)) {
+              if (jwtGenerator.isTokenValid(token)) {
+                if (jwtGenerator.isTokenExpired(token)) {
                   complete(HttpResponse(status = StatusCodes.Unauthorized, entity = "Token expired."))
                 } else {
                   val users = userService.getAllUser
@@ -64,8 +41,8 @@ class Routes extends UserJsonProtocol with SprayJsonSupport {
           (path(Segment) | parameter(Symbol("id"))) { id =>
             optionalHeaderValueByName("Authorization") {
               case Some(token) =>
-                if (isTokenValid(token)) {
-                  if (isTokenExpired(token)) {
+                if (jwtGenerator.isTokenValid(token)) {
+                  if (jwtGenerator.isTokenExpired(token)) {
                     complete(HttpResponse(status = StatusCodes.Unauthorized, entity = "Token expired."))
                   } else {
                     val user = userService.getById(Some(id))
@@ -83,13 +60,23 @@ class Routes extends UserJsonProtocol with SprayJsonSupport {
           path("register") {
             entity(as[User]) {
               user =>
-                val newUser = user.copy(id = Some(randomUUID().toString), reward = Some(0), status = Some(1))
-                println(newUser)
-                onComplete(userService.createNewUser(newUser)) {
-                  case Success(value) =>
-                    if (value) complete("User is registered successfully")
-                    else complete(StatusCodes.BadRequest, "User is not registered successfully")
-                  case Failure(ex) => complete(StatusCodes.InternalServerError, s"An error occurred: ${ex.getMessage}")
+                if(user.id.isEmpty) {
+                  val newUser = user.copy(id = Some(randomUUID().toString), reward = Some(0), status = Some(1))
+                  println(newUser)
+                  onComplete(userService.createNewUser(newUser)) {
+                    case Success(value) =>
+                      if (value) complete("User is registered successfully")
+                      else complete(StatusCodes.BadRequest, "User is not registered successfully")
+                    case Failure(ex) => complete(StatusCodes.InternalServerError, s"An error occurred: ${ex.getMessage}")
+                  }
+                }
+                else{
+                  onComplete(userService.createNewUser(user)) {
+                    case Success(value) =>
+                      if (value) complete("User is registered successfully")
+                      else complete(StatusCodes.BadRequest, "User is not registered successfully")
+                    case Failure(ex) => complete(StatusCodes.InternalServerError, s"An error occurred: ${ex.getMessage}")
+                  }
                 }
             }
           } ~
@@ -114,8 +101,8 @@ class Routes extends UserJsonProtocol with SprayJsonSupport {
                 userID =>
                   optionalHeaderValueByName("Authorization") {
                     case Some(token) =>
-                      if (isTokenValid(token)) {
-                        if (isTokenExpired(token)) {
+                      if (jwtGenerator.isTokenValid(token)) {
+                        if (jwtGenerator.isTokenExpired(token)) {
                           complete(HttpResponse(status = StatusCodes.Unauthorized, entity = "Token expired."))
                         } else {
                           onComplete(userService.createModerator(userID.id)) {
@@ -138,8 +125,8 @@ class Routes extends UserJsonProtocol with SprayJsonSupport {
                 userID =>
                   optionalHeaderValueByName("Authorization") {
                     case Some(token) =>
-                      if (isTokenValid(token)) {
-                        if (isTokenExpired(token)) {
+                      if (jwtGenerator.isTokenValid(token)) {
+                        if (jwtGenerator.isTokenExpired(token)) {
                           complete(HttpResponse(status = StatusCodes.Unauthorized, entity = "Token expired."))
                         } else {
                           onComplete(userService.disableUser(userID.id)) {
@@ -161,8 +148,8 @@ class Routes extends UserJsonProtocol with SprayJsonSupport {
                 userID =>
                   optionalHeaderValueByName("Authorization") {
                     case Some(token) =>
-                      if (isTokenValid(token)) {
-                        if (isTokenExpired(token)) {
+                      if (jwtGenerator.isTokenValid(token)) {
+                        if (jwtGenerator.isTokenExpired(token)) {
                           complete(HttpResponse(status = StatusCodes.Unauthorized, entity = "Token expired."))
                         } else {
                           onComplete(userService.enableUser(userID.id)) {
@@ -183,8 +170,8 @@ class Routes extends UserJsonProtocol with SprayJsonSupport {
               entity(as[List[User]]) { users =>
                 optionalHeaderValueByName("Authorization") {
                   case Some(token) =>
-                    if (isTokenValid(token)) {
-                      if (isTokenExpired(token)) {
+                    if (jwtGenerator.isTokenValid(token)) {
+                      if (jwtGenerator.isTokenExpired(token)) {
                         complete(HttpResponse(status = StatusCodes.Unauthorized, entity = "Token expired."))
                       } else {
                         if (users.head.id.isEmpty || users(1).id.isEmpty) {
@@ -212,8 +199,8 @@ class Routes extends UserJsonProtocol with SprayJsonSupport {
             entity(as[User]) { user =>
               optionalHeaderValueByName("Authorization") {
                 case Some(token) =>
-                  if (isTokenValid(token)) {
-                    if (isTokenExpired(token)) {
+                  if (jwtGenerator.isTokenValid(token)) {
+                    if (jwtGenerator.isTokenExpired(token)) {
                       complete(HttpResponse(status = StatusCodes.Unauthorized, entity = "Token expired."))
                     } else {
                       if(user.id.isEmpty) complete(InternalServerError, s"please provide the id of the user")
@@ -231,7 +218,6 @@ class Routes extends UserJsonProtocol with SprayJsonSupport {
                   }
                 case _ => complete(HttpResponse(status = StatusCodes.Unauthorized, entity = "No token provided!"))
               }
-
             }
           }
         }

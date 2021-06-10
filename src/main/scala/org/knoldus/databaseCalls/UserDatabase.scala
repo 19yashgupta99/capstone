@@ -4,109 +4,97 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 import org.knoldus.dao.Dao
+import org.knoldus.databaseCalls.ActorModelMessages._
 import org.knoldus.databaseConnection.{DBConnection, UserDb}
-import org.knoldus.model.{User, UserCredentials, UserId, UserType}
+import org.knoldus.model.{User, UserCredentials, UserType}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 import scala.language.postfixOps
-import scala.util.{Failure, Success, Try}
+import scala.util.Success
 
 
-case class DisableUser(userID : String)
-case class EnableUser(userId: String)
-case class CreateModerator(userID : String)
-case class LoginRequest(credentials: UserCredentials)
-case class CreateUser(user:User)
-case object ListAllUsers
-case class UpdateUser(oldUser : User, newUser : User)
-case class UpdateUserName(user: User, newName: String)
-case class UpdateUserCategory(user: User, newCategory: UserType.Value)
-case class DeleteUser(user: User)
-case class GetUserByID(id: Option[String])
+object ActorModelMessages{
+  case class DisableUser(userID : String)
+  case class EnableUser(userId: String)
+  case class CreateModerator(userID : String)
+  case class LoginRequest(credentials: UserCredentials)
+  case class CreateUser(user:User)
+  case object ListAllUsers
+  case class UpdateUser(oldUser : User, newUser : User)
+  case class UpdateUserName(user: User, newName: String)
+  case class UpdateUserCategory(user: User, newCategory: UserType.Value)
+  case class DeleteUser(user: User)
+  case class GetUserByID(id: Option[String])
+}
 
-class ActorModel extends Actor{
 
-  val dbConnection = new DBConnection
-  val userDbObject = new UserDb(dbConnection.db)
+class ActorModel(userDbObject : UserDb) extends Actor{
+
+ /* val dbConnection = new DBConnection
+  val userDbObject = new UserDb(dbConnection.db)*/
 
   override def receive: Receive = crudOperations()
 
   def crudOperations() :Receive ={
     case CreateUser(user) =>
-      val res = Future{
-          Try{
-            val result = userDbObject.insert(user)
-            result.map{
-              value => {
-                if(value > 0) Success
-                else Failure
-              }
-            }
-          } match {
-            case Failure(_) => false
-            case Success(_) => true
+      val res   = {
+        val result = userDbObject.insert(user)
+        result.map{
+          value => {
+            if(value > 0) true
+            else false
           }
+        }
       }.recover{
-        case _:RuntimeException => false
+        case _:RuntimeException =>
+          false
       }
       res.pipeTo(sender())
 
     case CreateModerator(id) =>
-      val res = Future{
-        Try{
-          val result = userDbObject.createModerator(id)
-          result.map{
-            value =>{
-              if(value > 0) Success
-              else Failure
-            }
+      val res   = {
+        val result = userDbObject.createModerator(id)
+        result.map{
+          value => {
+            if(value > 0) true
+            else false
           }
-        } match {
-          case Success(_) => true
-          case Failure(_) => false
         }
       }.recover{
-        case _:RuntimeException => false
+        case _:RuntimeException =>
+          false
       }
       res.pipeTo(sender())
 
     case DisableUser(id) =>
-      val res = Future{
-        Try{
-          val result = userDbObject.disableUser(id)
-          result.map{
-            value =>{
-              if(value > 0) Success
-              else Failure
-            }
+      val res   = {
+        val result = userDbObject.disableUser(id)
+        result.map{
+          value => {
+            if(value > 0) true
+            else false
           }
-        } match {
-          case Success(_) => true
-          case Failure(_) => false
         }
       }.recover{
-        case _:RuntimeException => false
+        case _:RuntimeException =>
+          false
       }
       res.pipeTo(sender())
 
     case EnableUser(id) =>
-      val res = Future{
-        Try{
-          val result = userDbObject.enableUser(id)
-          result.map{
-            value =>{
-              if(value > 0) Success
-              else Failure
-            }
+      val res   = {
+        val result = userDbObject.enableUser(id)
+        result.map{
+          value => {
+            if(value > 0) true
+            else false
           }
-        } match {
-          case Success(_) => true
-          case Failure(_) => false
         }
       }.recover{
-        case _:RuntimeException => false
+        case _:RuntimeException =>
+          false
       }
       res.pipeTo(sender())
 
@@ -136,78 +124,62 @@ class ActorModel extends Actor{
       finalResult.pipeTo(sender())
 
     case UpdateUser(oldUser,newUser) =>
-      val res =  Future{
-        Try{
-          val result = userDbObject.updateUser(oldUser,newUser)
-          result.map{
-            value =>{
-              if(value > 0) Success
-              else Failure
-            }
+      val res   = {
+        val result = userDbObject.updateUser(oldUser,newUser)
+        result.map{
+          value => {
+            if(value > 0) true
+            else false
           }
-        } match {
-            case Failure(_) => false
-            case Success(_) => true
-          }
+        }
       }.recover{
-        case _:RuntimeException => false
+        case _:RuntimeException =>
+          false
       }
       res.pipeTo(sender())
 
     case UpdateUserName(user,newName) =>
-      val res = Future{
-        Try{
-          val result = userDbObject.updateUserName(user,newName)
-          result.map{
-            value =>{
-              if(value > 0) Success
-              else Failure
-            }
+      val res   = {
+        val result = userDbObject.updateUserName(user, newName)
+        result.map{
+          value => {
+            if(value > 0) true
+            else false
           }
-        } match {
-            case Success(_) => true
-            case Failure(_) => false
-          }
+        }
       }.recover{
-        case _:RuntimeException => false
+        case _:RuntimeException =>
+          false
       }
       res.pipeTo(sender())
 
     case UpdateUserCategory(user, newCategory) =>
-      val res = Future{
-        Try{
-          val result = userDbObject.updateUserCategory(user,newCategory)
-          result.map{
-            value =>{
-              if(value > 0) Success
-              else Failure
-            }
+      val res   = {
+        val result = userDbObject.updateUserCategory(user, newCategory)
+        result.map{
+          value => {
+            if(value > 0) true
+            else false
           }
-        } match {
-            case Success(_) => true
-            case Failure(_) => false
-          }
+        }
       }.recover{
-        case _:RuntimeException => false
+        case _:RuntimeException =>
+          false
       }
       res.pipeTo(sender())
 
     case DeleteUser(user) =>
-      val res = Future{
-        Try{
-          val result = userDbObject.delete(user)
-          result.map{
-            value =>{
-              if(value > 0) Success
-              else Failure
-            }
+      val res   = {
+        val result = userDbObject.delete(user)
+        result.map{
+          value => {
+            if(value > 0) true
+            else false
           }
-        } match {
-          case Success(_) => true
-          case Failure(_) =>false
         }
       }.recover{
-        case _:RuntimeException => false
+        case _:RuntimeException =>
+          false
       }
       res.pipeTo(sender())
 
@@ -234,7 +206,8 @@ class ActorModel extends Actor{
 class UserDatabase extends Dao[User]{
 
   val system: ActorSystem = ActorSystem("System")
-  val actor: ActorRef = system.actorOf(Props[ActorModel])
+  val dbConnection = new DBConnection
+  val actor: ActorRef = system.actorOf(Props(new ActorModel(userDbObject = new UserDb(dbConnection.db))))
   implicit val timeout: Timeout = Timeout(5 seconds)
 
   override def createUser(user: User): Future[Boolean] =
